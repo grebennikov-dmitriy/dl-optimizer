@@ -6,7 +6,7 @@ Implements the exact REST API from the ТЗ: `/new`, `/status`, `/getresult`. As
 
 ```bash
 cp .env.example .env
-# Edit API_TOKEN and LLM settings (Ollama by default)
+# Edit API_TOKEN and LLM settings (Qwen local by default)
 docker compose up --build -d
 ```
 
@@ -36,18 +36,19 @@ docker compose up --build -d
 ## VS Code Usage
 1. Install extensions: **Docker**, **Python**, **REST Client** (optional), **Celery** (optional).
 2. Open the folder in VS Code.
-3. Copy `.env.example` → `.env`, set `API_TOKEN` and verify `OLLAMA_BASE_URL`.
+3. Copy `.env.example` → `.env`, set `API_TOKEN` and configure the LLM provider (`qwen_local` by default).
 4. Press `Ctrl+Shift+B` to run the **Docker: up** task, or use **Run and Debug** → **FastAPI (Docker Compose)** from the launch menu.
 5. Use `requests.http` to call API directly from VS Code (REST Client), or use cURL commands below.
 
 ## Local (no Docker) Dev Option
-Create a venv and run services directly (Ollama on localhost):
+Create a venv and run services directly.
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-export LLM_PROVIDER=ollama
+export LLM_PROVIDER=qwen_local
+export QWEN_MODEL_PATH=/opt/models/Qwen2-7B-Instruct  # change to your local path
+export QWEN_DEVICE=auto  # cpu | cuda | cuda:0 etc.
 export OPENAI_MODEL=qwen2:7b
-export OLLAMA_BASE_URL=http://localhost:11434
 export API_TOKEN=change-me
 export REDIS_URL=redis://localhost:6379/0
 # Terminal 1 (Celery)
@@ -55,6 +56,14 @@ celery -A worker.celery_app:celery_app worker --loglevel=INFO
 # Terminal 2 (API)
 uvicorn app.main:app --reload --port 8080
 ```
+
+### Choosing an LLM provider
+
+- `qwen_local` (default) — uses a locally downloaded [Qwen](https://huggingface.co/Qwen) model through the `transformers`
+  library. Configure `QWEN_MODEL_PATH`, `QWEN_DEVICE` (e.g. `cpu`, `cuda`, `cuda:0`) and optionally `QWEN_DTYPE`
+  (`bfloat16`, `float16`, ...). Adjust `QWEN_MAX_NEW_TOKENS` / `QWEN_TEMPERATURE` for generation behaviour.
+- `ollama` — set `LLM_PROVIDER=ollama` and `OLLAMA_BASE_URL` to point at your Ollama daemon.
+- `openai` — set `LLM_PROVIDER=openai`, `OPENAI_API_KEY` and optionally `OPENAI_MODEL`.
 
 ## Security
 - Token auth via `X-API-Token` header.
