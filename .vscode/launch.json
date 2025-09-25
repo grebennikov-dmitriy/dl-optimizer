@@ -1,0 +1,26 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "FastAPI (Docker Compose)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "docker compose up --build"
+    },
+    {
+      "name": "FastAPI (local uvicorn)",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/.venv/bin/uvicorn",
+      "args": ["app.main:app", "--reload", "--port", "8080"],
+      "env": {
+        "API_TOKEN": "change-me",
+        "LLM_PROVIDER": "ollama",
+        "OPENAI_MODEL": "qwen2:7b",
+        "OLLAMA_BASE_URL": "http://localhost:11434",
+        "REDIS_URL": "redis://localhost:6379/0"
+      },
+      "console": "integratedTerminal"
+    }
+  ]
+}

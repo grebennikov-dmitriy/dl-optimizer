@@ -1,0 +1,18 @@
+### Create task
+POST http://localhost:8080/new
+X-API-Token: change-me
+Content-Type: application/json
+
+{
+  "url":"jdbc://trino:8080/catalog?user=u&password=p",
+  "ddl":[{"statement":"CREATE TABLE catalog.public.events (event_id bigint)"}],
+  "queries":[{"queryid":"1","query":"SELECT * FROM catalog.public.events","runquantity":10}]
+}
+
+### Check status
+GET http://localhost:8080/status?task_id=935915da-62c5-43b9-8422-bbf9fb64e479
+X-API-Token: change-me
+
+### Get result
+GET http://localhost:8080/getresult?task_id=935915da-62c5-43b9-8422-bbf9fb64e479
+X-API-Token: change-me
