@@ -10,9 +10,9 @@ Content-Type: application/json
 }
 
 ### Check status
-GET http://localhost:8080/status?task_id=935915da-62c5-43b9-8422-bbf9fb64e479
+GET http://localhost:8080/status?task_id=d26003af-aec7-4357-8c28-22a70ea4c883
 X-API-Token: change-me
 
 ### Get result
-GET http://localhost:8080/getresult?task_id=935915da-62c5-43b9-8422-bbf9fb64e479
+GET http://localhost:8080/getresult?task_id=d26003af-aec7-4357-8c28-22a70ea4c883
 X-API-Token: change-me
