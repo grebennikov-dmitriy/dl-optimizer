@@ -1,7 +1,7 @@
 import uuid
-from typing import List
+from typing import Dict, List
 from ..models import NewRequest, SQLStatement
-from ..utils.ddl_parser import DDLTools
+from ..utils.ddl_parser import DDLTools, TableDefinition
 from ..utils.iceberg import recommend_table_properties
 from ..utils.sql_rewriter import Rewriter
 from .trino_client import TrinoClient
@@ -10,12 +10,15 @@ from .llm import LLM
 class Analyzer:
     def __init__(self, req: NewRequest):
         self.req = req
-        self.catalog = DDLTools.catalog_of_first(req.ddl)
+        self.tables: List[TableDefinition] = DDLTools.parse_tables(req.ddl)
+        self.catalog = self.tables[0].catalog if self.tables else DDLTools.catalog_of_first(req.ddl)
         self.new_schema = f"opt_{uuid.uuid4().hex[:8]}"
         self.trino = TrinoClient(req.url)
         self.llm = LLM()
 
     def _ddl_section(self) -> List[SQLStatement]:
+        if self.tables:
+            return self._ddl_from_existing_tables()
         props = recommend_table_properties()
         props_str = ",\n  ".join([f"'{k}'='{v}'" for k, v in props.items()])
         statements = [
@@ -34,6 +37,8 @@ class Analyzer:
         return statements
 
     def _migrations_section(self) -> List[SQLStatement]:
+        if self.tables:
+            return self._migration_from_existing_tables()
         mig = [
             SQLStatement(statement=(
                 f"INSERT INTO {self.catalog}.{self.new_schema}.fact_events\n"
@@ -50,7 +55,58 @@ class Analyzer:
         return mig
 
     def _queries_section(self):
-        return Rewriter.rewrite(self.req.queries)
+        mapping = self._table_mapping()
+        return Rewriter.rewrite(self.req.queries, mapping)
+
+    def _ddl_from_existing_tables(self) -> List[SQLStatement]:
+        statements: List[SQLStatement] = [
+            SQLStatement(statement=f"CREATE SCHEMA {self.catalog}.{self.new_schema}"),
+        ]
+        props = recommend_table_properties()
+        props_str = ",\n  ".join([f"'{k}'='{v}'" for k, v in props.items()])
+
+        for table in self.tables:
+            columns_and_options = table.body or ""
+            statement = (
+                f"CREATE TABLE {self.catalog}.{self.new_schema}.{table.table} "
+                f"{columns_and_options}"
+            ).rstrip()
+            if "WITH" not in columns_and_options.upper():
+                statement = (
+                    f"{statement}\nWITH (\n  {props_str}\n)"
+                )
+            statements.append(SQLStatement(statement=statement))
+        return statements
+
+    def _migration_from_existing_tables(self) -> List[SQLStatement]:
+        migrations: List[SQLStatement] = []
+        for table in self.tables:
+            migrations.append(
+                SQLStatement(
+                    statement=(
+                        f"INSERT INTO {self.catalog}.{self.new_schema}.{table.table}\n"
+                        f"SELECT * FROM {table.catalog}.{table.schema}.{table.table}"
+                    )
+                )
+            )
+        return migrations
+
+    def _table_mapping(self) -> Dict[str, str]:
+        mapping: Dict[str, str] = {}
+        for table in self.tables:
+            target = f"{self.catalog}.{self.new_schema}.{table.table}"
+            source_variants = [
+                f"{table.catalog}.{table.schema}.{table.table}",
+                f'"{table.catalog}"."{table.schema}"."{table.table}"',
+                f"{table.schema}.{table.table}",
+                f'"{table.schema}"."{table.table}"',
+                table.table,
+                f'"{table.table}"',
+            ]
+            for variant in source_variants:
+                if variant not in mapping:
+                    mapping[variant] = target
+        return mapping
 
     def run(self) -> dict:
         prompt = (
