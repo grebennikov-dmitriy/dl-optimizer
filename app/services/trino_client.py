@@ -70,6 +70,16 @@ class TrinoClient:
         if parsed.scheme.lower() != "jdbc":
             raise ValueError(f"Unsupported JDBC scheme: {parsed.scheme}")
 
+        if not parsed.netloc and parsed.path:
+            normalized_path = parsed.path
+            lowered_path = normalized_path.lower()
+            for prefix in ("trino://", "presto://"):
+                if lowered_path.startswith(prefix):
+                    remainder = normalized_path[len(prefix) :]
+                    reparsed = urlparse(f"jdbc://{remainder}")
+                    parsed = parsed._replace(netloc=reparsed.netloc, path=reparsed.path)
+                    break
+
         if not parsed.hostname:
             raise ValueError("JDBC URL must contain host")
 
