@@ -6,7 +6,7 @@ Implements the exact REST API from the ТЗ: `/new`, `/status`, `/getresult`. As
 
 ```bash
 cp .env.example .env
-# Edit API_TOKEN and LLM settings (Qwen local by default)
+# Edit API_TOKEN and confirm Ollama/qwen3:14b settings
 docker compose up --build -d
 ```
 
@@ -36,7 +36,7 @@ docker compose up --build -d
 ## VS Code Usage
 1. Install extensions: **Docker**, **Python**, **REST Client** (optional), **Celery** (optional).
 2. Open the folder in VS Code.
-3. Copy `.env.example` → `.env`, set `API_TOKEN` and configure the LLM provider (`qwen_local` by default).
+3. Copy `.env.example` → `.env`, set `API_TOKEN` and configure the LLM provider (`ollama` + `qwen3:14b` by default).
 4. Press `Ctrl+Shift+B` to run the **Docker: up** task, or use **Run and Debug** → **FastAPI (Docker Compose)** from the launch menu.
 5. Use `requests.http` to call API directly from VS Code (REST Client), or use cURL commands below.
 
@@ -45,12 +45,14 @@ Create a venv and run services directly.
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-export LLM_PROVIDER=qwen_local
-export QWEN_MODEL_PATH=/opt/models/Qwen2-7B-Instruct  # change to your local path
+export LLM_PROVIDER=ollama
+export OPENAI_MODEL=qwen3:14b
+export QWEN_MODEL_PATH=/opt/models/Qwen2-14B-Instruct  # only used when LLM_PROVIDER=qwen_local
 export QWEN_DEVICE=auto  # cpu | cuda | cuda:0 etc.
-export OPENAI_MODEL=qwen2:7b
 export API_TOKEN=change-me
 export REDIS_URL=redis://localhost:6379/0
+# Ensure your Ollama daemon is running locally:
+# ollama serve &
 # Terminal 1 (Celery)
 celery -A worker.celery_app:celery_app worker --loglevel=INFO
 # Terminal 2 (API)
@@ -59,11 +61,17 @@ uvicorn app.main:app --reload --port 8080
 
 ### Choosing an LLM provider
 
-- `qwen_local` (default) — uses a locally downloaded [Qwen](https://huggingface.co/Qwen) model through the `transformers`
+- `ollama` (default) — targets a local Ollama daemon that serves the `qwen3:14b` model. Make sure `ollama serve`
+  is running and that the model is available (`ollama pull qwen3:14b`). Configure `OLLAMA_BASE_URL` if the daemon is
+  exposed elsewhere.
+- `qwen_local` — uses a locally downloaded [Qwen](https://huggingface.co/Qwen) model through the `transformers`
   library. Configure `QWEN_MODEL_PATH`, `QWEN_DEVICE` (e.g. `cpu`, `cuda`, `cuda:0`) and optionally `QWEN_DTYPE`
   (`bfloat16`, `float16`, ...). Adjust `QWEN_MAX_NEW_TOKENS` / `QWEN_TEMPERATURE` for generation behaviour.
-- `ollama` — set `LLM_PROVIDER=ollama` and `OLLAMA_BASE_URL` to point at your Ollama daemon.
 - `openai` — set `LLM_PROVIDER=openai`, `OPENAI_API_KEY` and optionally `OPENAI_MODEL`.
+
+The analyzer now consumes the LLM's JSON plan directly. If the model returns invalid JSON, the service falls back to
+its deterministic rewrite pipeline, so you still get a valid response while the LLM remains the primary decision-maker
+when `ollama`/`qwen3:14b` is available.
 
 ## Security
 - Token auth via `X-API-Token` header.
