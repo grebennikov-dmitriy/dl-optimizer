@@ -2,13 +2,14 @@ from ..config import settings
 import httpx
 from functools import lru_cache
 
-# Pluggable LLM abstraction supporting local Ollama by default.
-# Set LLM_PROVIDER=ollama and OLLAMA_BASE_URL (e.g., http://host.docker.internal:11434)
+# Pluggable LLM abstraction supporting local Ollama (Qwen3 14B) by default.
+# Set LLM_PROVIDER=ollama and ensure an Ollama daemon exposes the qwen3:14b model
+# (e.g., by running `ollama pull qwen3:14b`).
 
 class LLM:
     def __init__(self):
         self.provider = settings.llm_provider.lower()
-        self.model = settings.openai_model  # reused as generic model name
+        self.model_name = settings.openai_model  # reused as generic model name
         self.ollama_base = getenv_default("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
         self.openai_api_key = settings.openai_api_key
         self.qwen_model_path = settings.qwen_model_path
@@ -31,7 +32,7 @@ class LLM:
         # Uses Ollama /api/generate for a simple prompt → completion call
         url = f"{self.ollama_base.rstrip('/')}/api/generate"
         payload = {
-            "model": self.model or "qwen2:7b",
+            "model": self.model_name or "qwen3:14b",
             "prompt": prompt,
             "stream": False
         }
@@ -49,7 +50,7 @@ class LLM:
             from openai import OpenAI
             client = OpenAI()
             resp = client.chat.completions.create(
-                model=self.model or "gpt-4o-mini",
+                model=self.model_name or "gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": "You are a SQL & Iceberg performance expert."},
                     {"role": "user", "content": prompt},
