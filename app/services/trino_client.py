@@ -4,8 +4,19 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional
 from urllib.parse import parse_qs, urlparse
 
-from trino import dbapi
-from trino.auth import BasicAuthentication
+try:  # pragma: no cover - exercised indirectly via import errors
+    from trino import dbapi
+    from trino.auth import BasicAuthentication
+except ModuleNotFoundError:  # pragma: no cover - depends on optional dependency
+    dbapi = None
+
+    class BasicAuthentication:  # type: ignore[misc]
+        """Fallback that mirrors the real class' constructor signature."""
+
+        def __init__(self, user: str, password: str):
+            self.user = user
+            self.password = password
+
 
 
 @dataclass
@@ -46,6 +57,10 @@ class TrinoClient:
         return stats
 
     def _connect(self):
+        if dbapi is None:
+            raise ModuleNotFoundError(
+                "trino package is not installed. Install it to enable database connections."
+            )
         auth = None
         if self.params.password:
             auth = BasicAuthentication(self.params.user, self.params.password)
@@ -69,6 +84,16 @@ class TrinoClient:
         parsed = urlparse(jdbc_url)
         if parsed.scheme.lower() != "jdbc":
             raise ValueError(f"Unsupported JDBC scheme: {parsed.scheme}")
+
+        if not parsed.netloc and parsed.path:
+            normalized_path = parsed.path
+            lowered_path = normalized_path.lower()
+            for prefix in ("trino://", "presto://"):
+                if lowered_path.startswith(prefix):
+                    remainder = normalized_path[len(prefix) :]
+                    reparsed = urlparse(f"jdbc://{remainder}")
+                    parsed = parsed._replace(netloc=reparsed.netloc, path=reparsed.path)
+                    break
 
         if not parsed.hostname:
             raise ValueError("JDBC URL must contain host")
